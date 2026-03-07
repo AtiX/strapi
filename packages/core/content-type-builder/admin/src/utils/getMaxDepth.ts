@@ -46,6 +46,34 @@ export const getChildrenMaxDepth = (
 };
 
 /**
+ * Returns the dynamic zone nesting depth for a component.
+ *
+ * Returns 1 if the component is referenced by another component's dynamiczone attribute
+ * (i.e. it lives inside a DZ that is itself inside a component), 0 otherwise.
+ *
+ * This is used to enforce MAX_DZ_DEPTH: if depth >= MAX_DZ_DEPTH the CTB should not
+ * offer "Dynamic Zone" as an available attribute type for that component.
+ *
+ * Note: This currently only returns 0 or 1, which is sufficient for MAX_DZ_DEPTH=1.
+ * If MAX_DZ_DEPTH is increased beyond 1, this function must be made recursive
+ * to walk the parent chain and count DZ transitions.
+ *
+ * @param component - The UID of the component to check.
+ * @param components - The array of all nested components (from retrieveNestedComponents).
+ * @returns 0 or 1 indicating the DZ nesting depth.
+ */
+export const getDzDepth = (
+  component: Internal.UID.Schema,
+  components: Array<NestedComponent>
+): number => {
+  const nestedCompo = findComponent(component, components);
+  if (!nestedCompo || !nestedCompo.viaDynamicZone) {
+    return 0;
+  }
+  return 1;
+};
+
+/**
  * Calculates the depth of a component within a nested component tree.
  * Depth is defined as the level at which the component is nested.
  * For example, a component at Depth 3 is the third nested component.

@@ -5,6 +5,8 @@ export type NestedComponent = {
   component: UID.Component;
   uidsOfAllParents?: UID.Component[];
   parentCompoUid?: UID.Component;
+  /** True if this component is referenced by another component's dynamiczone attribute */
+  viaDynamicZone?: boolean;
 };
 
 export const retrieveNestedComponents = (appComponents: Components): NestedComponent[] => {
@@ -34,6 +36,16 @@ const getComponentsNestedWithinComponent = (
       });
     }
 
+    if (type === 'dynamiczone' && 'components' in current && current.components) {
+      for (const dzComponentUid of current.components) {
+        acc.push({
+          component: dzComponentUid as UID.Component,
+          parentCompoUid,
+          viaDynamicZone: true,
+        });
+      }
+    }
+
     return acc;
   }, []);
 };
@@ -42,18 +54,23 @@ const getComponentsNestedWithinComponent = (
 const mergeComponents = (originalComponents: NestedComponent[]): NestedComponent[] => {
   const componentMap = new Map();
   // Populate the map with component and its parents
-  originalComponents.forEach(({ component, parentCompoUid }) => {
+  originalComponents.forEach(({ component, parentCompoUid, viaDynamicZone }) => {
     if (!componentMap.has(component)) {
-      componentMap.set(component, new Set());
+      componentMap.set(component, { parents: new Set(), viaDynamicZone: false });
     }
-    componentMap.get(component).add(parentCompoUid);
+    const entry = componentMap.get(component)!;
+    entry.parents.add(parentCompoUid);
+    if (viaDynamicZone) {
+      entry.viaDynamicZone = true;
+    }
   });
 
   // Convert the map to the desired array format
   const transformedComponents: NestedComponent[] = Array.from(componentMap.entries()).map(
-    ([component, parentCompoUidSet]) => ({
+    ([component, { parents, viaDynamicZone }]) => ({
       component,
-      uidsOfAllParents: Array.from(parentCompoUidSet),
+      uidsOfAllParents: Array.from(parents),
+      viaDynamicZone,
     })
   );
 

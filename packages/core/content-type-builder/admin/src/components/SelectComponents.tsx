@@ -25,7 +25,7 @@ type SelectComponentsProps = {
     };
   }) => void;
   value: string[];
-  targetUid: Internal.UID.ContentType;
+  targetUid: Internal.UID.Schema;
 };
 
 export const SelectComponents = ({
@@ -37,8 +37,14 @@ export const SelectComponents = ({
   targetUid,
 }: SelectComponentsProps) => {
   const { formatMessage } = useIntl();
-  const { componentsGroupedByCategory, contentTypes } = useDataManager();
-  const dzSchema = findAttribute(contentTypes[targetUid].attributes, dynamicZoneTarget);
+  const { componentsGroupedByCategory, contentTypes, components } = useDataManager();
+
+  // The DZ may live inside a component (not just a content-type), so check both maps.
+  const isTargetAComponent = !!components[targetUid as Internal.UID.Component];
+  const schema = isTargetAComponent
+    ? components[targetUid as Internal.UID.Component]
+    : contentTypes[targetUid as Internal.UID.ContentType];
+  const dzSchema = findAttribute(schema?.attributes ?? [], dynamicZoneTarget);
 
   if (!dzSchema) {
     return null;
@@ -48,9 +54,19 @@ export const SelectComponents = ({
 
   const filteredComponentsGroupedByCategory = Object.keys(componentsGroupedByCategory).reduce(
     (acc, current) => {
-      const filteredComponents = componentsGroupedByCategory[current].filter(({ uid }) => {
+      let filteredComponents = componentsGroupedByCategory[current].filter(({ uid }) => {
         return !alreadyUsedComponents.includes(uid);
       });
+
+      // When the DZ lives inside a component, exclude component types that themselves
+      // have DZ attributes to enforce the MAX_DZ_DEPTH = 1 limit.
+      if (isTargetAComponent) {
+        filteredComponents = filteredComponents.filter(({ uid }) => {
+          const compSchema = components[uid as Internal.UID.Component];
+          if (!compSchema) return true;
+          return !compSchema.attributes.some((attr) => attr.type === 'dynamiczone');
+        });
+      }
 
       if (filteredComponents.length > 0) {
         acc[current] = filteredComponents;
@@ -62,10 +78,10 @@ export const SelectComponents = ({
   );
   const options = Object.entries(filteredComponentsGroupedByCategory).reduce(
     (acc, current) => {
-      const [categoryName, components] = current;
+      const [categoryName, categoryComponents] = current;
       const section = {
         label: categoryName,
-        children: components.map(({ uid, info: { displayName } }) => {
+        children: categoryComponents.map(({ uid, info: { displayName } }) => {
           return { label: displayName, value: uid };
         }),
       };
